@@ -47,7 +47,7 @@ export const useMeemawStore = create<MeemawState>((set) => ({
   textValue: "",
   messages: initialMessages,
 
-  isMicEnabled: true,
+  isMicEnabled: false,
   isPaused: false,
   vadState: "idle",
 

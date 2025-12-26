@@ -1,12 +1,13 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { PiMicrophoneDuotone } from "react-icons/pi";
+import { PiMicrophoneDuotone, PiMicrophoneSlashDuotone } from "react-icons/pi";
 import { RiVoiceAiFill } from "react-icons/ri";
 import { IoMdClose } from "react-icons/io";
 import { useMeemawStore } from "../_stores/meemaw-store";
 import { useAudioRecorder } from "../hooks/useAudioRecorder";
 import { useEnhancedVAD, type VADState } from "../hooks/useEnhancedVAD";
+import GeminiWebGLWave from "./GeminiWebGLWave";
 
 type IconProps = {
   className?: string;
@@ -181,10 +182,7 @@ export default function MeemawLeft() {
   const [activeIndex, setActiveIndex] = useState(0);
   const textInputRef = useRef<HTMLInputElement | null>(null);
 
-  const audioVizRef = useRef<HTMLDivElement | null>(null);
-  const audioMotionRef = useRef<any>(null);
-  const micStreamRef = useRef<MediaStream | null>(null);
-  const micSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const [micStream, setMicStream] = useState<MediaStream | null>(null);
 
   const stride = 260 + 16;
 
@@ -196,6 +194,11 @@ export default function MeemawLeft() {
     pausedRef.current = isPaused;
   }, [isPaused]);
 
+  useEffect(() => {
+    micEnabledRef.current = isMicEnabled;
+    pausedRef.current = isPaused;
+  }, []);
+
   const clearSilenceTailTimer = useCallback(() => {
     if (silenceTailTimerRef.current) {
       clearTimeout(silenceTailTimerRef.current);
@@ -203,54 +206,22 @@ export default function MeemawLeft() {
     }
   }, []);
 
-  const connectAudioMotionToStream = useCallback((stream: MediaStream | null) => {
-    const audioMotion = audioMotionRef.current;
-    if (!audioMotion || !stream) return;
-
-    try {
-      audioMotion.disconnectInput(undefined, true);
-    } catch {
-      // ignore
-    }
-
-    try {
-      if (audioMotion.audioCtx?.state === "suspended") {
-        audioMotion.audioCtx.resume().catch(() => {});
-      }
-      const src = audioMotion.audioCtx.createMediaStreamSource(stream);
-      micSourceRef.current = src;
-      audioMotion.connectInput(src);
-    } catch {
-      // ignore
-    }
-  }, []);
-
-  const stopVisualizerOnly = useCallback(() => {
-    try {
-      audioMotionRef.current?.disconnectInput(undefined, true);
-    } catch {
-      // ignore
-    }
-    micSourceRef.current = null;
-  }, []);
-
   const stopAll = useCallback(async () => {
     clearSilenceTailTimer();
-    stopVisualizerOnly();
     vad.stop();
     if (isRecording) {
       try {
         await stopRecording();
       } catch {}
     }
-    micStreamRef.current = null;
+    setMicStream(null);
     setVadState("idle");
   }, [
     clearSilenceTailTimer,
     isRecording,
+    setMicStream,
     setVadState,
     stopRecording,
-    stopVisualizerOnly,
     vad,
   ]);
 
@@ -267,10 +238,10 @@ export default function MeemawLeft() {
 
     try {
       clearSilenceTailTimer();
-      stopVisualizerOnly();
       vad.stop();
 
       const blob = await stopRecording();
+      setMicStream(null);
       const dur = utteranceStartAtRef.current
         ? performance.now() - utteranceStartAtRef.current
         : 0;
@@ -306,8 +277,8 @@ export default function MeemawLeft() {
     clearSilenceTailTimer,
     screen,
     sendAudioAndWait,
+    setMicStream,
     stopRecording,
-    stopVisualizerOnly,
     vad,
     vadState,
   ]);
@@ -337,8 +308,7 @@ export default function MeemawLeft() {
         return;
       }
 
-      micStreamRef.current = stream;
-      connectAudioMotionToStream(stream);
+      setMicStream(stream);
 
       vad.start(stream, {
         onSpeech: () => {
@@ -373,10 +343,10 @@ export default function MeemawLeft() {
   }, [
     SILENCE_TAIL_MS,
     clearSilenceTailTimer,
-    connectAudioMotionToStream,
     handleInactivity,
     isRecording,
     screen,
+    setMicStream,
     startRecording,
     stopAndSendAfterSilence,
     vad,
@@ -395,11 +365,13 @@ export default function MeemawLeft() {
       return;
     }
 
+    setVadState("idle");
+
     requestAnimationFrame(() => {
       if (!micEnabledRef.current || pausedRef.current) return;
       void handleAutoStartRecording();
     });
-  }, [handleAutoStartRecording, stopAll]);
+  }, [handleAutoStartRecording, setIsMicEnabled, setIsPaused, setVadState, stopAll]);
 
   const updateActiveIndex = () => {
     const el = carouselRef.current;
@@ -431,79 +403,6 @@ export default function MeemawLeft() {
     if (!isTextOpen) return;
     textInputRef.current?.focus();
   }, [isTextOpen]);
-
-  useEffect(() => {
-    if (screen !== "live") return;
-
-    let cancelled = false;
-
-    const start = async () => {
-      if (!audioVizRef.current) return;
-
-      const mod: any = await import("audiomotion-analyzer");
-      const AudioMotionAnalyzer = mod?.default ?? mod?.AudioMotionAnalyzer;
-      if (!AudioMotionAnalyzer) return;
-
-      const audioMotion = new AudioMotionAnalyzer(audioVizRef.current, {
-        mode: 10,
-        channelLayout: "single",
-        colorMode: "gradient",
-        fillAlpha: 0.6,
-        lineWidth: 1.5,
-        mirror: 0,
-        reflexAlpha: 0,
-        reflexBright: 0,
-        reflexRatio: 0,
-        showBgColor: false,
-        showPeaks: false,
-        showScaleX: false,
-        showScaleY: false,
-        smoothing: 0.7,
-        minFreq: 30,
-        maxFreq: 16000,
-        connectSpeakers: false,
-      });
-
-      try {
-        audioMotion.registerGradient("meemawBlue", {
-          dir: "v",
-          colorStops: [
-            { color: "#60a5fa", pos: 0 },
-            { color: "#2563eb", pos: 0.55 },
-            { color: "#0b1b3a", pos: 1 },
-          ],
-        });
-        audioMotion.setOptions({ gradient: "meemawBlue", gradientRight: "meemawBlue" });
-      } catch {
-        // ignore
-      }
-
-      audioMotionRef.current = audioMotion;
-
-      if (micStreamRef.current) {
-        connectAudioMotionToStream(micStreamRef.current);
-      }
-    };
-
-    start().catch(() => {
-      // ignore
-    });
-
-    return () => {
-      cancelled = true;
-
-      stopVisualizerOnly();
-
-      try {
-        audioMotionRef.current?.destroy();
-      } catch {
-        // ignore
-      }
-
-      audioMotionRef.current = null;
-      micSourceRef.current = null;
-    };
-  }, [connectAudioMotionToStream, screen, stopVisualizerOnly]);
 
   useEffect(() => {
     if (screen !== "live") {
@@ -624,40 +523,51 @@ export default function MeemawLeft() {
                 <div className="mx-auto mt-4 h-px w-[260px] bg-white/10" />
               </section>
 
-              <section className="mt-6 flex min-h-0 flex-1 flex-col gap-3 overflow-auto pb-6">
-                {messages.map((m) => (
-                  <div
-                    key={m.id}
-                    className={
-                      m.role === "meemaw"
-                        ? "mr-10 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-[13px] leading-6 text-white/85"
-                        : "ml-10 rounded-2xl bg-white/10 px-4 py-3 text-[13px] leading-6 text-white/90"
-                    }
-                  >
-                    {m.text}
+              <div className="relative mt-6 mb-6 flex min-h-0 flex-1 flex-col overflow-hidden rounded-[34px]">
+                <div
+                  className="pointer-events-none absolute inset-0 z-0 rounded-[34px] border border-white/10 bg-black shadow-[0_0_0_1px_rgba(255,255,255,0.04)]"
+                  style={{
+                    WebkitMaskImage:
+                      "linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,1) 16%, rgba(0,0,0,1) 100%)",
+                    maskImage:
+                      "linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,1) 16%, rgba(0,0,0,1) 100%)",
+                  }}
+                />
+                <section className="relative z-10 flex min-h-0 flex-1 flex-col gap-3 overflow-auto px-4 pb-62 pt-5">
+                  {messages.map((m) => (
+                    <div
+                      key={m.id}
+                      className={
+                        m.role === "meemaw"
+                          ? "mr-10 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-[13px] leading-6 text-white/85"
+                          : "ml-10 rounded-2xl bg-white/10 px-4 py-3 text-[13px] leading-6 text-white/90"
+                      }
+                    >
+                      {m.text}
+                    </div>
+                  ))}
+                </section>
+
+                <div
+                  className="pointer-events-none absolute inset-x-0 bottom-0 z-0 h-[450px] overflow-hidden opacity-95"
+                  style={{
+                    WebkitMaskImage:
+                      "linear-gradient(to top, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 55%, rgba(0,0,0,0) 100%)",
+                    maskImage:
+                      "linear-gradient(to top, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 55%, rgba(0,0,0,0) 100%)",
+                  }}
+                  aria-hidden="true"
+                >
+                  <div className="absolute inset-0">
+                    <GeminiWebGLWave stream={micStream} />
                   </div>
-                ))}
-              </section>
+                  <div className="absolute inset-0 bg-gradient-to-t from-blue-600/10 via-transparent to-transparent" />
+                </div>
+              </div>
             </>
           )}
 
           <div className="relative mt-auto flex w-full flex-col items-center gap-4">
-            {screen === "live" && (
-              <div
-                className="pointer-events-none absolute -left-5 -right-5 -bottom-8 z-0 h-[260px] overflow-hidden opacity-95"
-                style={{
-                  WebkitMaskImage:
-                    "linear-gradient(to top, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 55%, rgba(0,0,0,0) 100%)",
-                  maskImage:
-                    "linear-gradient(to top, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 55%, rgba(0,0,0,0) 100%)",
-                }}
-                aria-hidden="true"
-              >
-                <div ref={audioVizRef} className="h-full w-full" />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/35 to-transparent" />
-              </div>
-            )}
-
             <div className="relative z-10 w-full max-w-[320px]">
               <div className="relative flex h-12 w-full items-center rounded-full border border-white/10 bg-white/5 p-1 text-white/80 backdrop-blur-md gap-2">
                 <div
@@ -748,7 +658,11 @@ export default function MeemawLeft() {
                     void handleToggleMic();
                   }}
                 >
-                  <PiMicrophoneDuotone className="h-5 w-5" />
+                  {isMicEnabled ? (
+                    <PiMicrophoneDuotone className="h-5 w-5" />
+                  ) : (
+                    <PiMicrophoneSlashDuotone className="h-5 w-5" />
+                  )}
                 </button>
                 <button
                   type="button"
