@@ -1,9 +1,12 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PiMicrophoneDuotone } from "react-icons/pi";
 import { RiVoiceAiFill } from "react-icons/ri";
 import { IoMdClose } from "react-icons/io";
+import { useMeemawStore } from "../_stores/meemaw-store";
+import { useAudioRecorder } from "../hooks/useAudioRecorder";
+import { useEnhancedVAD, type VADState } from "../hooks/useEnhancedVAD";
 
 type IconProps = {
   className?: string;
@@ -52,12 +55,6 @@ function IconKeyboard({ className }: IconProps) {
   );
 }
 
-type ChatMessage = {
-  id: string;
-  role: "meemaw" | "user";
-  text: string;
-};
-
 function FlashbackCard({
   title,
   description,
@@ -91,6 +88,51 @@ function FlashbackCard({
 }
 
 export default function MeemawLeft() {
+  const screen = useMeemawStore((s) => s.screen);
+  const setScreen = useMeemawStore((s) => s.setScreen);
+  const isTextOpen = useMeemawStore((s) => s.isTextOpen);
+  const setIsTextOpen = useMeemawStore((s) => s.setIsTextOpen);
+  const textValue = useMeemawStore((s) => s.textValue);
+  const setTextValue = useMeemawStore((s) => s.setTextValue);
+  const messages = useMeemawStore((s) => s.messages);
+  const addUserMessage = useMeemawStore((s) => s.addUserMessage);
+  const addMeemawMessage = useMeemawStore((s) => s.addMeemawMessage);
+
+  const isMicEnabled = useMeemawStore((s) => s.isMicEnabled);
+  const isPaused = useMeemawStore((s) => s.isPaused);
+  const vadState = useMeemawStore((s) => s.vadState);
+  const setIsMicEnabled = useMeemawStore((s) => s.setIsMicEnabled);
+  const setIsPaused = useMeemawStore((s) => s.setIsPaused);
+  const setVadState = useMeemawStore((s) => s.setVadState);
+
+  const micEnabledRef = useRef(true);
+  const pausedRef = useRef(false);
+  const startingRef = useRef(false);
+  const sendingRef = useRef(false);
+  const silenceTailTimerRef = useRef<number | null>(null);
+  const utteranceStartAtRef = useRef<number>(0);
+  const levelSumRef = useRef<number>(0);
+  const levelCountRef = useRef<number>(0);
+
+  const SILENCE_TAIL_MS = 600;
+  const MIN_BLOB_BYTES = 3584;
+  const MIN_UTTERANCE_MS = 550;
+  const MIN_AVG_LEVEL = 0.07;
+
+  const { isRecording, startRecording, stopRecording } = useAudioRecorder();
+  const vad = useEnhancedVAD({
+    threshold: 0.0096,
+    silenceMs: 1300,
+    intervalMs: 20,
+    inactivityMs: 20000,
+    minSpeechMs: 260,
+    adaptNoise: false,
+    noiseFloorAlpha: 0.04,
+    noiseMultiplier: 2.0,
+    releaseMultiplier: 1.5,
+    cooldownMs: 600,
+  });
+
   const flashbacks = useMemo(
     () => [
       {
@@ -137,17 +179,7 @@ export default function MeemawLeft() {
   const startScrollLeftRef = useRef(0);
   const rafRef = useRef<number | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
-  const [isTextOpen, setIsTextOpen] = useState(false);
-  const [textValue, setTextValue] = useState("");
   const textInputRef = useRef<HTMLInputElement | null>(null);
-  const [screen, setScreen] = useState<"home" | "live">("home");
-  const [liveMessages, setLiveMessages] = useState<ChatMessage[]>(() => [
-    {
-      id: "m1",
-      role: "meemaw",
-      text: "hi im meemaw. i'm here with you — tell me what’s on your mind.",
-    },
-  ]);
 
   const audioVizRef = useRef<HTMLDivElement | null>(null);
   const audioMotionRef = useRef<any>(null);
@@ -155,6 +187,219 @@ export default function MeemawLeft() {
   const micSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
 
   const stride = 260 + 16;
+
+  useEffect(() => {
+    micEnabledRef.current = isMicEnabled;
+  }, [isMicEnabled]);
+
+  useEffect(() => {
+    pausedRef.current = isPaused;
+  }, [isPaused]);
+
+  const clearSilenceTailTimer = useCallback(() => {
+    if (silenceTailTimerRef.current) {
+      clearTimeout(silenceTailTimerRef.current);
+      silenceTailTimerRef.current = null;
+    }
+  }, []);
+
+  const connectAudioMotionToStream = useCallback((stream: MediaStream | null) => {
+    const audioMotion = audioMotionRef.current;
+    if (!audioMotion || !stream) return;
+
+    try {
+      audioMotion.disconnectInput(undefined, true);
+    } catch {
+      // ignore
+    }
+
+    try {
+      if (audioMotion.audioCtx?.state === "suspended") {
+        audioMotion.audioCtx.resume().catch(() => {});
+      }
+      const src = audioMotion.audioCtx.createMediaStreamSource(stream);
+      micSourceRef.current = src;
+      audioMotion.connectInput(src);
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const stopVisualizerOnly = useCallback(() => {
+    try {
+      audioMotionRef.current?.disconnectInput(undefined, true);
+    } catch {
+      // ignore
+    }
+    micSourceRef.current = null;
+  }, []);
+
+  const stopAll = useCallback(async () => {
+    clearSilenceTailTimer();
+    stopVisualizerOnly();
+    vad.stop();
+    if (isRecording) {
+      try {
+        await stopRecording();
+      } catch {}
+    }
+    micStreamRef.current = null;
+    setVadState("idle");
+  }, [
+    clearSilenceTailTimer,
+    isRecording,
+    setVadState,
+    stopRecording,
+    stopVisualizerOnly,
+    vad,
+  ]);
+
+  const sendAudioAndWait = useCallback(
+    async (_blob: Blob) => {
+      vad.setProcessing(false);
+    },
+    [vad],
+  );
+
+  const stopAndSendAfterSilence = useCallback(async () => {
+    if (sendingRef.current || vadState === "processing") return;
+    sendingRef.current = true;
+
+    try {
+      clearSilenceTailTimer();
+      stopVisualizerOnly();
+      vad.stop();
+
+      const blob = await stopRecording();
+      const dur = utteranceStartAtRef.current
+        ? performance.now() - utteranceStartAtRef.current
+        : 0;
+      const avgLevel =
+        levelCountRef.current > 0
+          ? levelSumRef.current / levelCountRef.current
+          : 0;
+
+      utteranceStartAtRef.current = 0;
+      levelSumRef.current = 0;
+      levelCountRef.current = 0;
+
+      if (
+        blob &&
+        blob.size >= MIN_BLOB_BYTES &&
+        dur >= MIN_UTTERANCE_MS &&
+        avgLevel >= MIN_AVG_LEVEL
+      ) {
+        vad.setProcessing(true);
+        await sendAudioAndWait(blob);
+      }
+
+      if (micEnabledRef.current && !pausedRef.current && screen === "live") {
+        setVadState("idle");
+      }
+    } finally {
+      sendingRef.current = false;
+    }
+  }, [
+    MIN_AVG_LEVEL,
+    MIN_BLOB_BYTES,
+    MIN_UTTERANCE_MS,
+    clearSilenceTailTimer,
+    screen,
+    sendAudioAndWait,
+    stopRecording,
+    stopVisualizerOnly,
+    vad,
+    vadState,
+  ]);
+
+  const handleInactivity = useCallback(async () => {
+    setIsPaused(true);
+    pausedRef.current = true;
+    micEnabledRef.current = false;
+    setIsMicEnabled(false);
+    await stopAll();
+    addMeemawMessage("Paused due to inactivity. Tap mic to resume.");
+  }, [addMeemawMessage, setIsMicEnabled, setIsPaused, stopAll]);
+
+  const handleAutoStartRecording = useCallback(async () => {
+    if (screen !== "live") return;
+    if (!micEnabledRef.current || pausedRef.current) return;
+    if (startingRef.current || isRecording) return;
+    if (vadState !== "idle") return;
+
+    try {
+      startingRef.current = true;
+      const stream = await startRecording();
+      if (!stream) return;
+
+      if (!micEnabledRef.current || pausedRef.current || screen !== "live") {
+        stream.getTracks().forEach((t) => t.stop());
+        return;
+      }
+
+      micStreamRef.current = stream;
+      connectAudioMotionToStream(stream);
+
+      vad.start(stream, {
+        onSpeech: () => {
+          clearSilenceTailTimer();
+          utteranceStartAtRef.current = performance.now();
+          levelSumRef.current = 0;
+          levelCountRef.current = 0;
+          setVadState("speaking");
+        },
+        onSilence: () => {
+          clearSilenceTailTimer();
+          silenceTailTimerRef.current = window.setTimeout(() => {
+            void stopAndSendAfterSilence();
+          }, SILENCE_TAIL_MS) as unknown as number;
+        },
+        onInactivity: () => {
+          void handleInactivity();
+        },
+        onAudioLevel: (l) => {
+          if (utteranceStartAtRef.current > 0) {
+            levelSumRef.current += l;
+            levelCountRef.current += 1;
+          }
+        },
+        onStateChange: (s) => {
+          setVadState(s);
+        },
+      });
+    } finally {
+      startingRef.current = false;
+    }
+  }, [
+    SILENCE_TAIL_MS,
+    clearSilenceTailTimer,
+    connectAudioMotionToStream,
+    handleInactivity,
+    isRecording,
+    screen,
+    startRecording,
+    stopAndSendAfterSilence,
+    vad,
+    vadState,
+  ]);
+
+  const handleToggleMic = useCallback(async () => {
+    const next = !micEnabledRef.current;
+    micEnabledRef.current = next;
+    setIsMicEnabled(next);
+    pausedRef.current = false;
+    setIsPaused(false);
+
+    if (!next) {
+      await stopAll();
+      return;
+    }
+
+    requestAnimationFrame(() => {
+      if (!micEnabledRef.current || pausedRef.current) return;
+      void handleAutoStartRecording();
+    });
+  }, [handleAutoStartRecording, stopAll]);
 
   const updateActiveIndex = () => {
     const el = carouselRef.current;
@@ -235,20 +480,9 @@ export default function MeemawLeft() {
 
       audioMotionRef.current = audioMotion;
 
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      if (cancelled) {
-        stream.getTracks().forEach((t) => t.stop());
-        return;
+      if (micStreamRef.current) {
+        connectAudioMotionToStream(micStreamRef.current);
       }
-
-      micStreamRef.current = stream;
-      if (audioMotion.audioCtx?.state === "suspended") {
-        await audioMotion.audioCtx.resume();
-      }
-
-      const source = audioMotion.audioCtx.createMediaStreamSource(stream);
-      micSourceRef.current = source;
-      audioMotion.connectInput(source);
     };
 
     start().catch(() => {
@@ -258,11 +492,7 @@ export default function MeemawLeft() {
     return () => {
       cancelled = true;
 
-      try {
-        audioMotionRef.current?.disconnectInput(undefined, true);
-      } catch {
-        // ignore
-      }
+      stopVisualizerOnly();
 
       try {
         audioMotionRef.current?.destroy();
@@ -272,13 +502,27 @@ export default function MeemawLeft() {
 
       audioMotionRef.current = null;
       micSourceRef.current = null;
-
-      if (micStreamRef.current) {
-        micStreamRef.current.getTracks().forEach((t) => t.stop());
-        micStreamRef.current = null;
-      }
     };
-  }, [screen]);
+  }, [connectAudioMotionToStream, screen, stopVisualizerOnly]);
+
+  useEffect(() => {
+    if (screen !== "live") {
+      void stopAll();
+      return;
+    }
+
+    if (isMicEnabled && !isPaused && !isRecording && vadState === "idle") {
+      void handleAutoStartRecording();
+    }
+  }, [
+    handleAutoStartRecording,
+    isMicEnabled,
+    isPaused,
+    isRecording,
+    screen,
+    stopAll,
+    vadState,
+  ]);
 
   return (
     <main className="relative min-h-[100dvh] w-full overflow-hidden bg-black text-white select-none">
@@ -381,7 +625,7 @@ export default function MeemawLeft() {
               </section>
 
               <section className="mt-6 flex min-h-0 flex-1 flex-col gap-3 overflow-auto pb-6">
-                {liveMessages.map((m) => (
+                {messages.map((m) => (
                   <div
                     key={m.id}
                     className={
@@ -440,10 +684,7 @@ export default function MeemawLeft() {
                         const v = textValue.trim();
                         if (!v) return;
                         if (screen === "live") {
-                          setLiveMessages((prev) => [
-                            ...prev,
-                            { id: `u-${Date.now()}`, role: "user", text: v },
-                          ]);
+                          addUserMessage(v);
                         }
                         setTextValue("");
                         requestAnimationFrame(() => {
@@ -483,6 +724,7 @@ export default function MeemawLeft() {
                     onClick={() => {
                       setScreen("live");
                       setIsTextOpen(false);
+                      setTextValue("");
                     }}
                   >
                     <RiVoiceAiFill className="h-4 w-4" />
@@ -496,8 +738,15 @@ export default function MeemawLeft() {
               <div className="relative z-10 flex items-center justify-center gap-4">
                 <button
                   type="button"
-                  className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-red-600/90 text-white shadow-[0_10px_30px_rgba(244,63,94,0.25)]"
+                  className={
+                    isMicEnabled
+                      ? "inline-flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/90 text-white shadow-[0_10px_30px_rgba(16,185,129,0.25)]"
+                      : "inline-flex h-12 w-12 items-center justify-center rounded-full bg-red-600/90 text-white shadow-[0_10px_30px_rgba(244,63,94,0.25)]"
+                  }
                   aria-label="Mic"
+                  onClick={() => {
+                    void handleToggleMic();
+                  }}
                 >
                   <PiMicrophoneDuotone className="h-5 w-5" />
                 </button>
@@ -508,6 +757,7 @@ export default function MeemawLeft() {
                   onClick={() => {
                     setScreen("home");
                     setIsTextOpen(false);
+                    setTextValue("");
                   }}
                 >
                   <IoMdClose className="h-5 w-5" />
