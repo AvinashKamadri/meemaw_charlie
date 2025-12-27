@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { IoCloseSharp, IoSparklesSharp } from "react-icons/io5";
 
 type SuggestionEvent = {
@@ -63,16 +64,22 @@ function formatSuggestionTitle(type: SuggestionEvent["type"]) {
   return "Do you want me to revisit this memory?";
 }
 
+function circleShort(id: string) {
+  const parts = id.split("_");
+  const tail = parts[parts.length - 1] ?? id;
+  return tail.length > 3 ? tail.slice(-3) : tail;
+}
+
 function SuggestionCard({ ev }: { ev: SuggestionEvent }) {
   const [hovered, setHovered] = useState<string | null>(null);
 
   const actions = useMemo(
     () =>
       ev.type === "merge_flashback"
-        ? ["Merge", "Review", "Ignore"]
+        ? ["Merge", "Ignore"]
         : ev.type === "refine_flashback"
-          ? ["Refine", "Review", "Ignore"]
-          : ["Revisit", "Review", "Ignore"],
+          ? ["Refine", "Ignore"]
+          : ["Revisit", "Ignore"],
     [ev.type],
   );
 
@@ -81,39 +88,86 @@ function SuggestionCard({ ev }: { ev: SuggestionEvent }) {
       <div className={`${glassyBase} ${glassyHighlight} px-4 py-2 text-[12px] font-semibold text-white/85`}>
         {formatSuggestionTitle(ev.type)}
       </div>
-      <div className="mt-2 text-[12px] leading-5 text-white/60">{ev.impact_review}</div>
+      <div className="mt-0 ml-2 text-[11px] leading-5 text-white/40">{ev.impact_review}</div>
+      <div className="mt-2 text-[12px] leading-5 text-white/60">Pick an option</div>
 
       <div className="mt-3 flex flex-wrap gap-2">
         {actions.map((a) => (
-          <button
+          <motion.button
             key={a}
             type="button"
             className={`${glassyBase} ${glassyHighlight} px-4 py-2 text-[12px] font-semibold text-white/85`}
             onMouseEnter={() => setHovered(a)}
             onMouseLeave={() => setHovered(null)}
+            whileHover={{ scale: 1.06, y: -2 }}
+            whileTap={{ scale: 0.96, y: 0 }}
+            transition={{ type: "spring", stiffness: 520, damping: 32, mass: 0.7 }}
           >
             {a}
-          </button>
+          </motion.button>
         ))}
       </div>
 
       <div className="mt-2 min-h-[18px] text-[12px] text-white/55">
-        {hovered ? (
-          <span>
-            <span className="text-white/75">{hovered}:</span> {ev.description}
-          </span>
-        ) : null}
+        <AnimatePresence mode="wait" initial={false}>
+          {hovered ? (
+            <motion.div
+              key={hovered}
+              initial={{ opacity: 0, y: 10, scale: 0.98, filter: "blur(6px)" }}
+              animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
+              exit={{ opacity: 0, y: 6, scale: 0.99, filter: "blur(4px)" }}
+              transition={{ type: "spring", stiffness: 520, damping: 38, mass: 0.7 }}
+            >
+              <span>
+                <span className="text-white/75">{hovered}:</span> {ev.description}
+              </span>
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
       </div>
 
       <div className="mt-3 text-[11px] text-white/45">
-        <div className="break-words">
-          <span className="font-semibold text-white/55">People:</span>{" "}
-          {ev.related_entities.people_ids.join(", ") || "-"}
+        <div className="flex items-center gap-2">
+          <span className="shrink-0 font-semibold text-white/55">People:</span>
+          <div className="flex flex-wrap gap-2">
+            {ev.related_entities.people_ids.length ? (
+              ev.related_entities.people_ids.map((pid) => (
+                <span
+                  key={pid}
+                  title={pid}
+                  className="inline-flex h-19 w-19 items-center justify-center rounded-full border border-white/10 bg-transparent text-[11px] font-semibold text-white/70 backdrop-blur-md shadow-[0_0_0_1px_rgba(255,255,255,0.06)] transition hover:bg-white/5"
+                >
+                  {circleShort(pid)}
+                </span>
+              ))
+            ) : (
+              <span className="text-white/35">-</span>
+            )}
+          </div>
         </div>
-        <div className="mt-1 break-words">
-          <span className="font-semibold text-white/55">Flashbacks:</span>{" "}
-          {ev.related_entities.flashback_ids.join(", ") || "-"}
+
+       <div className="mt-2 flex items-center gap-2 pb-2">
+          <span className="shrink-0 font-semibold text-white/55">Flashbacks:</span>
+          <div className="flex flex-wrap gap-2">
+            {ev.related_entities.flashback_ids.length ? (
+              ev.related_entities.flashback_ids.map((fid) => (
+                <span
+                  key={fid}
+                  title={fid}
+                  className="inline-flex h-19 w-19 items-center justify-center rounded-full border border-white/10 bg-transparent text-[11px] font-semibold text-white/70 backdrop-blur-md shadow-[0_0_0_1px_rgba(255,255,255,0.06)] transition hover:bg-white/5"
+                >
+                  {circleShort(fid)}
+                </span>
+              ))
+            ) : (
+              <span className="text-white/35">-</span>
+            )}
+          </div>
         </div>
+
+      
+
+       
       </div>
     </div>
   );
@@ -131,34 +185,76 @@ function ClarifyingQuestionCard({ ev }: { ev: ClarifyingQuestionEvent }) {
 
       <div className="mt-3 flex flex-wrap gap-2">
         {ev.options.map((o) => (
-          <button
+          <motion.button
             key={o}
             type="button"
             className={`${glassyBase} ${glassyHighlight} px-4 py-2 text-[12px] font-semibold text-white/85`}
             onMouseEnter={() => setHovered(o)}
             onMouseLeave={() => setHovered(null)}
+            whileHover={{ scale: 1.06, y: -2 }}
+            whileTap={{ scale: 0.96, y: 0 }}
+            transition={{ type: "spring", stiffness: 520, damping: 32, mass: 0.7 }}
           >
             {o}
-          </button>
+          </motion.button>
         ))}
       </div>
 
       <div className="mt-2 min-h-[18px] text-[12px] text-white/55">
-        {hovered ? (
-          <span>
-            <span className="text-white/75">{hovered}:</span> {ev.description}
-          </span>
-        ) : null}
+        <AnimatePresence mode="wait" initial={false}>
+          {hovered ? (
+            <motion.div
+              key={hovered}
+              initial={{ opacity: 0, y: 10, scale: 0.98, filter: "blur(6px)" }}
+              animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
+              exit={{ opacity: 0, y: 6, scale: 0.99, filter: "blur(4px)" }}
+              transition={{ type: "spring", stiffness: 520, damping: 38, mass: 0.7 }}
+            >
+              <span>
+                <span className="text-white/75">{hovered}:</span> {ev.description}
+              </span>
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
       </div>
 
       <div className="mt-3 text-[11px] text-white/45">
-        <div className="break-words">
-          <span className="font-semibold text-white/55">People:</span>{" "}
-          {ev.related_people.join(", ") || "-"}
+        <div className="flex items-center gap-2 pb-1/2">
+          <span className="shrink-0 font-semibold text-white/55">People:</span>
+          <div className="flex flex-wrap gap-2">
+            {ev.related_people.length ? (
+              ev.related_people.map((pid) => (
+                <span
+                  key={pid}
+                  title={pid}
+                  className="inline-flex h-19 w-19 items-center justify-center rounded-full border border-white/10 bg-transparent text-[11px] font-semibold text-white/70 backdrop-blur-md shadow-[0_0_0_1px_rgba(255,255,255,0.06)] transition hover:bg-white/5"
+                >
+                  {circleShort(pid)}
+                </span>
+              ))
+            ) : (
+              <span className="text-white/35">-</span>
+            )}
+          </div>
         </div>
-        <div className="mt-1 break-words">
-          <span className="font-semibold text-white/55">Flashbacks:</span>{" "}
-          {ev.related_flashbacks.join(", ") || "-"}
+
+        <div className="mt-2 flex items-center gap-2">
+          <span className="shrink-0 font-semibold text-white/55">Flashbacks:</span>
+          <div className="flex flex-wrap gap-8">
+            {ev.related_flashbacks.length ? (
+              ev.related_flashbacks.map((fid) => (
+                <span
+                  key={fid}
+                  title={fid}
+                  className="inline-flex h-19 w-19 items-center justify-center rounded-full border border-white/10 bg-transparent text-[11px] font-semibold text-white/70 backdrop-blur-md shadow-[0_0_0_1px_rgba(255,255,255,0.06)] transition hover:bg-white/5"
+                >
+                  {circleShort(fid)}
+                </span>
+              ))
+            ) : (
+              <span className="text-white/35">-</span>
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -301,24 +397,34 @@ export default function MeemawRight() {
                     </div>
                   ) : (
                     <div className="flex flex-col">
-                      {events.map((ev, idx) => {
-                        const key = ev.kind === "suggestionEvent" ? `s-${ev.id}` : `c-${ev.id}`;
-                        const node =
-                          ev.kind === "suggestionEvent" ? (
-                            <SuggestionCard ev={ev} />
-                          ) : (
-                            <ClarifyingQuestionCard ev={ev} />
-                          );
+                      <AnimatePresence initial={false}>
+                        {events.map((ev, idx) => {
+                          const key = ev.kind === "suggestionEvent" ? `s-${ev.id}` : `c-${ev.id}`;
+                          const node =
+                            ev.kind === "suggestionEvent" ? (
+                              <SuggestionCard ev={ev} />
+                            ) : (
+                              <ClarifyingQuestionCard ev={ev} />
+                            );
 
-                        return (
-                          <React.Fragment key={key}>
-                            {node}
-                            {idx < events.length - 1 ? (
-                              <div className="mx-6 my-3 h-px bg-white/10" />
-                            ) : null}
-                          </React.Fragment>
-                        );
-                      })}
+                          return (
+                            <motion.div
+                              key={key}
+                              layout
+                              style={{ overflow: "hidden" }}
+                              initial={{ opacity: 0, y: -16, scale: 0.985, filter: "blur(8px)", height: 0 }}
+                              animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)", height: "auto" }}
+                              exit={{ opacity: 0, y: -12, scale: 0.985, filter: "blur(8px)", height: 0 }}
+                              transition={{ type: "spring", stiffness: 520, damping: 40, mass: 0.75 }}
+                            >
+                              {node}
+                              {idx < events.length - 1 ? (
+                                <div className="mx-6 my-3 h-px bg-white/10" />
+                              ) : null}
+                            </motion.div>
+                          );
+                        })}
+                      </AnimatePresence>
                     </div>
                   )}
                 </div>
@@ -402,14 +508,14 @@ export default function MeemawRight() {
               <div className="mt-4 grid gap-3">
                 <button
                   type="button"
-                  className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-left text-[13px] font-semibold text-white/85 transition hover:bg-white/10"
+                  className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-left text-[13px] font-semibold text-white/65 transition hover:bg-white/10"
                   onClick={() => {
                     pushEvent({
                       kind: "suggestionEvent",
                       id: crypto.randomUUID(),
                       type: "merge_flashback",
                       description: "I can combine overlapping memories into one cleaner flashback.",
-                      impact_review: "May reduce duplicates and improve recall continuity.",
+                      impact_review: "Helps reduce duplicates and improve recall continuity.",
                       related_entities: {
                         people_ids: ["p_12", "p_23"],
                         flashback_ids: ["f_91", "f_93"],
