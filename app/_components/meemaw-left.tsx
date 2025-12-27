@@ -120,7 +120,8 @@ export default function MeemawLeft() {
   const MIN_UTTERANCE_MS = 550;
   const MIN_AVG_LEVEL = 0.07;
 
-  const { isRecording, startRecording, stopRecording } = useAudioRecorder();
+  const { isRecording, startRecording, stopRecording, stopStream } =
+    useAudioRecorder();
   const vad = useEnhancedVAD({
     threshold: 0.0096,
     silenceMs: 1300, // vad 
@@ -214,6 +215,7 @@ export default function MeemawLeft() {
         await stopRecording();
       } catch {}
     }
+    stopStream();
     setMicStream(null);
     setVadState("idle");
   }, [
@@ -222,6 +224,7 @@ export default function MeemawLeft() {
     setMicStream,
     setVadState,
     stopRecording,
+    stopStream,
     vad,
   ]);
 
@@ -241,7 +244,6 @@ export default function MeemawLeft() {
       vad.stop();
 
       const blob = await stopRecording();
-      setMicStream(null);
       const dur = utteranceStartAtRef.current
         ? performance.now() - utteranceStartAtRef.current
         : 0;

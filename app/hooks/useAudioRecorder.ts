@@ -4,6 +4,7 @@ export interface UseAudioRecorderReturn {
   isRecording: boolean;
   startRecording: () => Promise<MediaStream | null>;
   stopRecording: () => Promise<Blob | null>;
+  stopStream: () => void;
   audioBlob: Blob | null;
   requestPermission: () => Promise<boolean>;
   hasPermission: boolean | null; // null = not checked, true = granted, false = denied
@@ -46,6 +47,13 @@ export const useAudioRecorder = (): UseAudioRecorderReturn => {
     }
   }, []);
 
+  const stopStream = useCallback(() => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+  }, []);
+
   const startRecording = useCallback(async (): Promise<MediaStream | null> => {
     try {
       // Request microphone access (or request permission if not already granted)
@@ -57,20 +65,26 @@ export const useAudioRecorder = (): UseAudioRecorderReturn => {
         }
       }
 
-      let stream: MediaStream | null = null;
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          audio: {
-            noiseSuppression: true,
-            echoCancellation: true,
-            autoGainControl: false,
-            channelCount: 1,
-          } as any,
-        });
-      } catch {
-        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      let stream: MediaStream | null = streamRef.current;
+
+      const tracks = stream?.getTracks() ?? [];
+      const hasLiveTrack = tracks.some((t) => t.readyState === 'live');
+
+      if (!stream || !hasLiveTrack) {
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+              noiseSuppression: true,
+              echoCancellation: true,
+              autoGainControl: false,
+              channelCount: 1,
+            } as any,
+          });
+        } catch {
+          stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        }
+        streamRef.current = stream;
       }
-      streamRef.current = stream;
 
       // Create MediaRecorder
       const mediaRecorder = new MediaRecorder(stream);
@@ -108,10 +122,6 @@ export const useAudioRecorder = (): UseAudioRecorderReturn => {
           log('finalize blob', { size: blob.size });
           setAudioBlob(blob);
           setIsRecording(false);
-          if (streamRef.current) {
-            streamRef.current.getTracks().forEach((track) => track.stop());
-            streamRef.current = null;
-          }
           resolve(blob);
         } catch (e) {
           console.error('[Recorder] finalize error', e);
@@ -171,6 +181,7 @@ export const useAudioRecorder = (): UseAudioRecorderReturn => {
     isRecording,
     startRecording,
     stopRecording,
+    stopStream,
     audioBlob,
     requestPermission,
     hasPermission,
