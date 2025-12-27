@@ -51,7 +51,14 @@ export const useMeemawStore = create<MeemawState>((set) => ({
   isPaused: false,
   vadState: "idle",
 
-  setScreen: (screen) => set({ screen }),
+  // mic on when entering the start screen by default
+  setScreen: (screen) =>
+    set((state) => ({
+      screen,
+      isMicEnabled: screen === "home" ? false : state.isMicEnabled,
+      isPaused: false,
+      vadState: "idle",
+    })),
   setIsTextOpen: (isTextOpen) => set({ isTextOpen }),
   setTextValue: (textValue) => set({ textValue }),
 

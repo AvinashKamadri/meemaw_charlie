@@ -123,7 +123,7 @@ export default function MeemawLeft() {
   const { isRecording, startRecording, stopRecording } = useAudioRecorder();
   const vad = useEnhancedVAD({
     threshold: 0.0096,
-    silenceMs: 1300,
+    silenceMs: 1300, // vad 
     intervalMs: 20,
     inactivityMs: 20000,
     minSpeechMs: 260,
@@ -591,12 +591,14 @@ export default function MeemawLeft() {
                       className="flex w-full items-center gap-2"
                       onSubmit={(e) => {
                         e.preventDefault();
-                        const v = textValue.trim();
+                        const v = textValue.trim(); // trim whitespace
                         if (!v) return;
-                        if (screen === "live") {
-                          addUserMessage(v);
+                        if (screen !== "live") {
+                          setIsMicEnabled(false);// mic off with text mode
+                          setScreen("live"); // navigate to the start screen on text send
                         }
-                        setTextValue("");
+                        addUserMessage(v);
+                        setTextValue(""); // clear the text input
                         requestAnimationFrame(() => {
                           textInputRef.current?.focus();
                         });
@@ -632,6 +634,7 @@ export default function MeemawLeft() {
                         : "inline-flex h-10 w-1/2 items-center justify-center gap-2 rounded-full text-[13px] font-medium text-white/90 hover:bg-white/5"
                     }
                     onClick={() => {
+                      setIsMicEnabled(true);
                       setScreen("live");
                       setIsTextOpen(false);
                       setTextValue("");
