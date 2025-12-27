@@ -431,10 +431,10 @@ export default function MeemawLeft() {
       <div className="pointer-events-none absolute -bottom-44 -right-28 h-[520px] w-[520px] rounded-full bg-rose-600/25 blur-3xl" />
 
       <div className="relative mx-auto w-full max-w-[430px] lg:mx-0">
-        <div className="relative flex min-h-[100dvh] flex-col box-border px-5 pb-8 pt-10">
+        <div className="relative flex min-h-[100dvh] flex-col box-border px-5 pb-8 pt-6">
           {screen === "home" ? (
             <>
-              <section className="mt-10">
+              <section className="mt-6">
                 <h1 className="text-balance text-center text-[20px] font-semibold leading-7 text-white/90">
                   Hi, I&apos;m MeeMa! <br />Your AI companion.
                 </h1>
@@ -516,14 +516,14 @@ export default function MeemawLeft() {
             </>
           ) : (
             <>
-              <section className="mt-6">
+              <section className="mt-3">
                 <div className="text-center text-[14px] font-semibold text-white/85">
                   Live
                 </div>
                 <div className="mx-auto mt-4 h-px w-[260px] bg-white/10" />
               </section>
 
-              <div className="relative mt-6 mb-6 flex min-h-0 flex-1 flex-col overflow-hidden rounded-[34px]">
+              <div className="relative mt-4 mb-6 flex min-h-0 flex-1 flex-col overflow-hidden rounded-[34px]">
                 <div
                   className="pointer-events-none absolute inset-0 z-0 rounded-[34px] border border-white/10 bg-black shadow-[0_0_0_1px_rgba(255,255,255,0.04)]"
                   style={{
@@ -533,14 +533,14 @@ export default function MeemawLeft() {
                       "linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,1) 16%, rgba(0,0,0,1) 100%)",
                   }}
                 />
-                <section className="relative z-10 flex min-h-0 flex-1 flex-col gap-3 overflow-auto px-4 pb-62 pt-5">
+                <section className="relative z-10 flex min-h-0 flex-1 flex-col gap-3 overflow-auto overflow-x-hidden px-4 pb-62 pt-5">
                   {messages.map((m) => (
                     <div
                       key={m.id}
                       className={
                         m.role === "meemaw"
-                          ? "mr-10 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-[13px] leading-6 text-white/85"
-                          : "ml-10 rounded-2xl bg-white/10 px-4 py-3 text-[13px] leading-6 text-white/90"
+                          ? "mr-10 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-[13px] leading-6 text-white/85 break-words"
+                          : "ml-10 rounded-2xl bg-white/10 px-4 py-3 text-[13px] leading-6 text-white/90 break-words"
                       }
                     >
                       {m.text}
