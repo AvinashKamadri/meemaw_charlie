@@ -115,7 +115,7 @@ export default function GeminiWebGLWave({
     ures: WebGLUniformLocation | null;
   } | null>(null);
   const roRef = useRef<ResizeObserver | null>(null);
-  const smoothedAudioRef = useRef<number>(0.07); // idle sensi 2
+  const smoothedAudioRef = useRef<number>(0.07); // idle sensi adjustable values
 
   const quadVertices = useMemo(
     () => new Float32Array([-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1]),

@@ -99,6 +99,11 @@ export default function MeemawLeft() {
   const addUserMessage = useMeemawStore((s) => s.addUserMessage);
   const addMeemawMessage = useMeemawStore((s) => s.addMeemawMessage);
 
+  const glassyIconButtonBase =
+    "relative inline-flex h-12 w-12 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-white/5 text-white/90 backdrop-blur-md shadow-[0_0_0_1px_rgba(255,255,255,0.06)] transition hover:bg-white/10 active:scale-[0.98]";
+  const glassyIconButtonHighlight =
+    "before:pointer-events-none before:absolute before:inset-0 before:rounded-full before:bg-gradient-to-b before:from-white/20 before:to-transparent before:opacity-80";
+
   const isMicEnabled = useMeemawStore((s) => s.isMicEnabled);
   const isPaused = useMeemawStore((s) => s.isPaused);
   const vadState = useMeemawStore((s) => s.vadState);
@@ -653,11 +658,11 @@ export default function MeemawLeft() {
               <div className="relative z-10 flex items-center justify-center gap-4">
                 <button
                   type="button"
-                  className={
+                  className={`${glassyIconButtonBase} ${glassyIconButtonHighlight} ${
                     isMicEnabled
-                      ? "inline-flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/90 text-white shadow-[0_10px_30px_rgba(16,185,129,0.25)]"
-                      : "inline-flex h-12 w-12 items-center justify-center rounded-full bg-red-600/90 text-white shadow-[0_10px_30px_rgba(244,63,94,0.25)]"
-                  }
+                      ? "ring-1 ring-emerald-400/30 shadow-[0_10px_30px_rgba(16,185,129,0.18),0_0_0_1px_rgba(255,255,255,0.06)]"
+                      : "ring-1 ring-rose-400/30 shadow-[0_10px_30px_rgba(244,63,94,0.16),0_0_0_1px_rgba(255,255,255,0.06)]"
+                  }`}
                   aria-label="Mic"
                   onClick={() => {
                     void handleToggleMic();
@@ -671,7 +676,7 @@ export default function MeemawLeft() {
                 </button>
                 <button
                   type="button"
-                  className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-red-600/90 text-white shadow-[0_10px_30px_rgba(244,63,94,0.25)]"
+                  className={`${glassyIconButtonBase} ${glassyIconButtonHighlight} ring-1 ring-rose-400/30 shadow-[0_10px_30px_rgba(244,63,94,0.16),0_0_0_1px_rgba(255,255,255,0.06)]`}
                   aria-label="End"
                   onClick={() => {
                     setScreen("home");
