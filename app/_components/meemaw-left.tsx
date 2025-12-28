@@ -580,7 +580,7 @@ export default function MeemawLeft() {
                 <div
                   className={
                     isTextOpen
-                      ? "flex w-full items-center gap-2 rounded-full bg-white/10 px-3 transition-all duration-200"
+                      ? "flex flex-1 items-center gap-2 rounded-full bg-white/10 px-3 transition-all duration-200"
                       : "flex w-1/2 items-center justify-center gap-2 rounded-full bg-white/10 px-3 transition-all duration-200"
                   }
                 >
@@ -631,6 +631,20 @@ export default function MeemawLeft() {
                     </form>
                   )}
                 </div>
+
+                {isTextOpen && (
+                  <button
+                    type="button"
+                    aria-label="Close text"
+                    className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/10 text-white/85 hover:bg-white/15 active:scale-[0.98]"
+                    onClick={() => {
+                      setIsTextOpen(false);
+                      setTextValue("");
+                    }}
+                  >
+                    <IoMdClose className="h-4 w-4" />
+                  </button>
+                )}
 
                 {!isTextOpen && (
                   <button
