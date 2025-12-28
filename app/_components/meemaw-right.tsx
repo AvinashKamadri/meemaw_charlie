@@ -84,7 +84,7 @@ function SuggestionCard({ ev }: { ev: SuggestionEvent }) {
   );
 
   return (
-    <div className="px-1">
+    <div className="px-1 select-none">
       <div className={`${glassyBase} ${glassyHighlight} px-4 py-2 text-[12px] font-semibold text-white/85`}>
         {formatSuggestionTitle(ev.type)}
       </div>
@@ -177,7 +177,7 @@ function ClarifyingQuestionCard({ ev }: { ev: ClarifyingQuestionEvent }) {
   const [hovered, setHovered] = useState<string | null>(null);
 
   return (
-    <div className="px-1">
+    <div className="px-1 select-none">
       <div className={`${glassyBase} ${glassyHighlight} px-4 py-2 text-[12px] font-semibold text-white/85`}>
         {ev.question}
       </div>
@@ -337,7 +337,7 @@ export default function MeemawRight() {
   }, [toast, toastKey]);
 
   return (
-    <div className="hidden lg:block">
+    <div className="hidden lg:block select-none">
       {isDrawerOpen ? (
         <div
           className="fixed inset-0 z-[9998] bg-black/0"
