@@ -573,7 +573,7 @@ export default function MeemawLeft() {
               </div>
             </>
           )}
-
+                {/* pill */}
           <div className="relative mt-auto flex w-full flex-col items-center gap-4">
             <div className="relative z-10 w-full max-w-[320px]">
               <div className="relative flex h-12 w-full items-center rounded-full border border-white/10 bg-white/5 p-1 text-white/80 backdrop-blur-md gap-2">
@@ -583,7 +583,7 @@ export default function MeemawLeft() {
                       ? "flex flex-1 items-center gap-2 rounded-full bg-white/10 px-3 transition-all duration-200"
                       : "flex w-1/2 items-center justify-center gap-2 rounded-full bg-white/10 px-3 transition-all duration-200"
                   }
-                >
+                >   
                   {!isTextOpen ? (
                     <button
                       type="button"
@@ -611,7 +611,7 @@ export default function MeemawLeft() {
                         });
                       }}
                     >
-                      <IconKeyboard className="h-4 w-4 text-white/70" />
+                      <IconKeyboard className="h-8 w-8 text-white/70" />
                       <input
                         ref={textInputRef}
                         value={textValue}
@@ -624,7 +624,12 @@ export default function MeemawLeft() {
                       />
                       <button
                         type="submit"
-                        className="inline-flex h-9 shrink-0 items-center justify-center rounded-full bg-white/10 px-4 text-[12px] font-semibold text-white/90"
+                        className="inline-flex h-9 shrink-0 items-center justify-center rounded-full bg-white/10 px-4 text-[12px] font-semibold text-white/90 "
+                        // makes the send button close the text inputtttttttttt    
+                        // onClick={() => { 
+                        //   setIsTextOpen(false);
+                        //   setTextValue("");
+                        // }}
                       >
                         Send
                       </button>
